@@ -11,9 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add source files
 file(GLOB SOURCES CONFIGURE_DEPENDS src/*)
 
+# Raylib
+add_subdirectory(external/raylib)
+
 # Create an executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-
 # Link libraries (example, can remove if not needed)
-# target_link_libraries(${PROJECT_NAME} PRIVATE some_library)
+target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
