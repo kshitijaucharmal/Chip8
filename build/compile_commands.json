@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/kshitij/projects/cpp/Chip8/build",
-  "command": "/sbin/c++ -std=gnu++20 -o CMakeFiles/Chip8.dir/src/main.cpp.o -c /home/kshitij/projects/cpp/Chip8/src/main.cpp",
-  "file": "/home/kshitij/projects/cpp/Chip8/src/main.cpp",
-  "output": "/home/kshitij/projects/cpp/Chip8/build/CMakeFiles/Chip8.dir/src/main.cpp.o"
-}
-]
