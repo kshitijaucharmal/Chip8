@@ -1,0 +1,4 @@
+BasedOnStyle: LLVM
+IndentWidth: 4       # Number of spaces per indentation level
+TabWidth: 4          # Width of tab character
+UseTab: Never # Options: Never, ForIndentation, Always
