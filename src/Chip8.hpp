@@ -19,6 +19,7 @@ struct Chip8 {
     uint16_t program_counter;
 
     // Stack (for subroutine calls)
+    // Using an array as stack does not provide a way to limit to 16
     std::array<uint16_t, 16> stack;
 
     // Stack Pointer
@@ -40,4 +41,15 @@ struct Chip8 {
     // Constructor
     explicit Chip8();
     bool loadROM(const std::string &path);
+
+    // Loop Component
+    // Fetches instruction from memory at PC
+    uint16_t fetchOp();
+    // Decode instruction to figure out what to do
+    // This will include all opcodes
+    // TODO: Decide what this returns (probably an enum)
+    void decode();
+    // execute the instruction
+    // TODO: Take in the decoded value, and the instruction probably as args
+    void execute();
 };

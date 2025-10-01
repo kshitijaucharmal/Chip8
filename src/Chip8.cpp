@@ -1,4 +1,3 @@
-#include <cstddef>
 #include <cstdio>
 #include <fstream>
 #include <ios>
@@ -60,11 +59,20 @@ bool Chip8::loadROM(const std::string &path) {
     if (!rom.read(buffer.data(), size))
         return false;
 
-    // Load at 0x200
+    // Load at program counter loc (0x200)
     for (size_t i = 0; i < buffer.size(); i++) {
-        memory[0x200 + i] = buffer[i];
+        memory[program_counter + i] = buffer[i];
     }
-
-    printf("ROM: [\"%s\"] Loaded Successfully !\n", path.c_str());
     return true;
+}
+
+uint16_t Chip8::fetchOp() {
+    uint8_t i1 = memory[program_counter];
+    uint8_t i2 = memory[program_counter + 1];
+    uint16_t instruction = (static_cast<uint16_t>(i1) << 8) | i2;
+
+    // increment pc
+    program_counter += 2;
+
+    return instruction;
 }
