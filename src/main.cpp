@@ -1,4 +1,7 @@
 
+#include "SDL3/SDL_mouse.h"
+#include <iostream>
+#include <ostream>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -14,6 +17,10 @@ const int tilesize = 10;
 /* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
+const SDL_FRect button = {10, 10, 200, 80};
+SDL_Color normalColor = {70, 130, 180, 255}; // steel blue
+SDL_Color hoverColor = {100, 149, 237, 255}; // lighter blue
+SDL_Color activeColor = {30, 144, 255, 255}; // darker blue
 
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
@@ -55,24 +62,45 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         return SDL_APP_SUCCESS; /* end the program, reporting success to the OS.
                                  */
     }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        int x = event->button.x;
+        int y = event->button.y;
+        if (x >= button.x && x < button.x + button.w && y >= button.y &&
+            y < button.y + button.h) {
+            // button clicked
+            std::cout << "Button Clicked" << std::endl;
+        }
+    }
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate) {
-    const double now = ((double)SDL_GetTicks()) /
-                       1000.0; /* convert from milliseconds to seconds. */
-    /* choose the color for the frame we will draw. The sine wave trick makes it
-     * fade between colors smoothly. */
-    const float red = (float)(0.5 + 0.5 * SDL_sin(now));
-    const float green = (float)(0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 2 / 3));
-    const float blue = (float)(0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 4 / 3));
-    SDL_SetRenderDrawColorFloat(
-        renderer, red, green, blue,
-        SDL_ALPHA_OPAQUE_FLOAT); /* new color, full alpha. */
 
-    /* clear the window to the draw color. */
+    float mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    bool hovering = (mouseX >= button.x && mouseX < button.x + button.w &&
+                     mouseY >= button.y && mouseY < button.y + button.h);
+
+    // Draw
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255); // background
     SDL_RenderClear(renderer);
+
+    // Choose button color
+    SDL_Color drawColor = hovering ? hoverColor : normalColor;
+    if (hovering && SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK) {
+        drawColor = activeColor; // pressed state
+    }
+
+    SDL_SetRenderDrawColor(renderer, drawColor.r, drawColor.g, drawColor.b,
+                           255);
+    SDL_RenderFillRect(renderer, &button);
+
+    // Draw outline
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderRect(renderer, &button);
 
     /* put the newly-cleared rendering on the screen. */
     SDL_RenderPresent(renderer);
