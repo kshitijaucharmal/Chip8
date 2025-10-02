@@ -1,4 +1,3 @@
-
 #include "SDL3/SDL_mouse.h"
 #include <cstdint>
 #include <iostream>

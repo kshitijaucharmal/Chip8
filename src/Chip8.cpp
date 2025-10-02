@@ -1,7 +1,9 @@
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <ios>
+#include <strings.h>
 #include <vector>
 
 #include "Chip8.hpp"
@@ -77,6 +79,19 @@ uint16_t Chip8::fetchOp() {
     return current_op;
 }
 
+void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
+    for (int y = 0; y < 32; y++) {
+        for (int x = 0; x < 64; x++) {
+            int index = y * 64 + x;
+            if (screen[index] == 1)
+                printf("██"); // pixel ON
+            else
+                printf("  "); // pixel OFF
+        }
+        printf("\n"); // new row
+    }
+}
+
 void Chip8::decode(uint16_t instruction) {
     uint8_t D = (instruction & 0xF000) >> 12;
     uint8_t X = (instruction & 0x0F00) >> 8;
@@ -85,6 +100,8 @@ void Chip8::decode(uint16_t instruction) {
 
     // Get the last three nibbles in one, useful for many instructions
     uint16_t tribble = (X << 8) | (Y << 4) | N;
+    // Get the last two nibbles in one
+    uint8_t dibble = (Y << 4) | N;
 
     // Print the instruction
     printf("%X%X%X%X: ", D, X, Y, N);
@@ -99,26 +116,109 @@ void Chip8::decode(uint16_t instruction) {
     }
     // Jump to location, 1NNN
     else if (D == 0x1) {
-        printf("Set PC to %04X\n", tribble);
+        printf("Jump to %04X\n", tribble);
         program_counter = tribble;
     }
-    // Call a subroutine 2NNN
+    // 2NNN Call a subroutine
     else if (D == 0x2) {
         // TODO: Check if stack filled
         // Pushing to stack
+        printf("Push PC (%04X) to stack and Jump to %X\n", program_counter,
+               tribble);
         stack[stack_ptr++] = program_counter;
 
         program_counter = tribble;
     }
-    // Return from a subroutine
-    else if (D == 0x00EE) {
+    // 00EE Return from a subroutine
+    else if (instruction == 0x00EE) {
         // Read the top
         program_counter = stack[stack_ptr - 1];
         // Set it back to zero
         stack[stack_ptr - 1] = 0;
         // get the ptr down
         stack_ptr--;
-    } else {
+
+        printf("Go Back\n");
+    }
+    // ANNN set index register to NNN
+    else if (D == 0xA) {
+        printf("Set I to %X", tribble);
+        index_register = tribble;
+    }
+    // 3xkk - Skip Next (PC += 2) if Vx = kk
+    else if (D == 0x3) {
+        if (dibble == registers[X]) {
+            printf("%02X == %02X, skipping next instruction.\n", dibble,
+                   registers[X]);
+            program_counter += 2;
+        }
+        printf("%02X != %02X, nothing to do.\n", dibble, registers[X]);
+    }
+    // 4xkk - Skip Next (PC += 2) if Vx != kk
+    else if (D == 0x4) {
+        if (dibble != registers[X]) {
+            printf("%02X != %02X, skipping next instruction.\n", dibble,
+                   registers[X]);
+            program_counter += 2;
+        }
+        printf("%02X == %02X, nothing to do.\n", dibble, registers[X]);
+    }
+    // 5xy0 - Skip Next (PC += 2) if Vx == Vy
+    else if (D == 0x5) {
+        if (registers[X] == registers[Y]) {
+            printf("%02X == %02X, skipping next instruction.\n", registers[X],
+                   registers[Y]);
+            program_counter += 2;
+        }
+        printf("%02X != %02X, nothing to do.\n", registers[X], registers[Y]);
+    }
+    // 6xkk - Set Vx = kk
+    else if (D == 0x6) {
+        printf("Setting register %X to %X\n", X, dibble);
+        registers[X] = dibble;
+    }
+    // 7xkk - Add kk to Vx
+    else if (D == 0x7) {
+        printf("Adding %X to register %X = %X\n", dibble, registers[X],
+               registers[X] + dibble);
+        registers[X] += dibble;
+    }
+    // DXYN - Display
+    else if (D == 0xD) {
+        printf("Drawing Sprite\n");
+
+        registers[0xF] = 0;
+
+        // For N rows
+        for (auto row = 0; row < N; row++) {
+            uint8_t yPos = registers[Y] + row;
+            if (yPos >= 32)
+                break;
+            uint8_t sprite_data = memory[index_register + row];
+            for (int col = 0; col < 8; col++) {
+                uint8_t xPos = registers[X] + col;
+                if (xPos >= 64)
+                    break;
+                if ((sprite_data & (0x80 >> col)) != 0) {
+                    // Index in graphics array
+                    size_t index = yPos * 64 + xPos;
+
+                    if (graphics[index] == 1) {
+                        registers[0xF] = 1;
+                    }
+
+                    graphics[index] ^= 1;
+                }
+            }
+        }
+
+    }
+
+    // Jump to the next line
+    else {
         printf("\n");
     }
+
+    printf("\033[2J\033[H");
+    drawScreen(graphics);
 }
