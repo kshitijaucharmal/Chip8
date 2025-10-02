@@ -1,5 +1,6 @@
 
 #include "SDL3/SDL_mouse.h"
+#include <cstdint>
 #include <iostream>
 #include <ostream>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
@@ -22,17 +23,18 @@ SDL_Color normalColor = {70, 130, 180, 255}; // steel blue
 SDL_Color hoverColor = {100, 149, 237, 255}; // lighter blue
 SDL_Color activeColor = {30, 144, 255, 255}; // darker blue
 
+Chip8 chip;
+
+const double fps = 60.0;
+const double frame_time = 1000.0 / fps;
+
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
-
     if (argc == 2) {
-        Chip8 chip;
         // Load ROM
         if (!chip.loadROM(argv[1])) {
             return SDL_APP_FAILURE;
         }
-
-        // Ahead
 
     } else {
         printf("Invalid arguments passed, check file path\n");
@@ -77,6 +79,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate) {
+    uint64_t start = SDL_GetTicks();
+
+    // Update
+
+    // Chip 8 Update loop -------------
+    auto instruction = chip.fetchOp();
+    chip.decode(instruction);
+    // --------------------------------
 
     float mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
@@ -104,6 +114,12 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
     /* put the newly-cleared rendering on the screen. */
     SDL_RenderPresent(renderer);
+
+    // Frame Linting
+    uint64_t elapsed = SDL_GetTicks() - start;
+    if (elapsed < frame_time) {
+        SDL_Delay((uint32_t)(frame_time - elapsed));
+    }
 
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }

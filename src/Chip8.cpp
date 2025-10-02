@@ -1,7 +1,7 @@
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <ios>
-#include <iostream>
 #include <vector>
 
 #include "Chip8.hpp"
@@ -34,7 +34,7 @@ bool Chip8::loadROM(const std::string &path) {
     std::ifstream rom(path.c_str(), std::ios::in | std::ios::binary);
 
     if (!rom.is_open()) {
-        std::cerr << "File not found: " << path << std::endl;
+        printf("File not found: %s\n", path.c_str());
         return false;
     }
 
@@ -69,10 +69,56 @@ bool Chip8::loadROM(const std::string &path) {
 uint16_t Chip8::fetchOp() {
     uint8_t i1 = memory[program_counter];
     uint8_t i2 = memory[program_counter + 1];
-    uint16_t instruction = (static_cast<uint16_t>(i1) << 8) | i2;
+    uint16_t current_op = (static_cast<uint16_t>(i1) << 8) | i2;
 
     // increment pc
     program_counter += 2;
 
-    return instruction;
+    return current_op;
+}
+
+void Chip8::decode(uint16_t instruction) {
+    uint8_t D = (instruction & 0xF000) >> 12;
+    uint8_t X = (instruction & 0x0F00) >> 8;
+    uint8_t Y = (instruction & 0x00F0) >> 4;
+    uint8_t N = (instruction & 0x000F);
+
+    // Get the last three nibbles in one, useful for many instructions
+    uint16_t tribble = (X << 8) | (Y << 4) | N;
+
+    // Print the instruction
+    printf("%X%X%X%X: ", D, X, Y, N);
+
+    // TODO: Implement these in execute, instruction type -> enum
+    //
+    // Clear Screen 0x00E0
+    if (instruction == 0x00E0) {
+        printf("Clear Screen\n");
+        // Clear Screen
+        graphics.fill(0);
+    }
+    // Jump to location, 1NNN
+    else if (D == 0x1) {
+        printf("Set PC to %04X\n", tribble);
+        program_counter = tribble;
+    }
+    // Call a subroutine 2NNN
+    else if (D == 0x2) {
+        // TODO: Check if stack filled
+        // Pushing to stack
+        stack[stack_ptr++] = program_counter;
+
+        program_counter = tribble;
+    }
+    // Return from a subroutine
+    else if (D == 0x00EE) {
+        // Read the top
+        program_counter = stack[stack_ptr - 1];
+        // Set it back to zero
+        stack[stack_ptr - 1] = 0;
+        // get the ptr down
+        stack_ptr--;
+    } else {
+        printf("\n");
+    }
 }

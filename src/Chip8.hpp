@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "fontset.hpp"
 struct Chip8 {
@@ -48,8 +49,8 @@ struct Chip8 {
     // Decode instruction to figure out what to do
     // This will include all opcodes
     // TODO: Decide what this returns (probably an enum)
-    void decode();
+    void decode(uint16_t instruction);
     // execute the instruction
-    // TODO: Take in the decoded value, and the instruction probably as args
+    // TODO: Take in the decoded value
     void execute();
 };
