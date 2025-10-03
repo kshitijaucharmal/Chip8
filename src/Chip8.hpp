@@ -3,7 +3,6 @@
 #include <array>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 #include "fontset.hpp"
 struct Chip8 {
@@ -30,7 +29,7 @@ struct Chip8 {
     std::array<uint8_t, 64 * 32> graphics;
 
     // Keypad 16 keys (0x0 - 0xF)(0 - not pressed, 1 - pressed)
-    std::array<uint8_t, 16> key;
+    std::array<uint8_t, 16> keypad;
 
     // Timers 8bit, decrement at 60Hz
     // Delay Timer (DT)

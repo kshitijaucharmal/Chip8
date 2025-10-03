@@ -16,7 +16,7 @@ Chip8::Chip8() {
     memory.fill(0);
     registers.fill(0);
     graphics.fill(0);
-    key.fill(0);
+    keypad.fill(0);
     stack.fill(0);
 
     // Reset Special Registers
@@ -47,7 +47,6 @@ bool Chip8::loadROM(const std::string &path) {
     std::streamsize size = rom.tellg();
     // Go back
     rom.seekg(0, std::ios::beg);
-
     printf("Size: %td\n", size);
 
     if (size <= 0 || size > (4096 - 0x200)) {
@@ -80,18 +79,18 @@ uint16_t Chip8::fetchOp() {
     return current_op;
 }
 
-void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
-    for (int y = 0; y < 32; y++) {
-        for (int x = 0; x < 64; x++) {
-            int index = y * 64 + x;
-            if (screen[index] == 1)
-                printf("██"); // pixel ON
-            else
-                printf("  "); // pixel OFF
-        }
-        printf("\n"); // new row
-    }
-}
+// void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
+//     for (int y = 0; y < 32; y++) {
+//         for (int x = 0; x < 64; x++) {
+//             int index = y * 64 + x;
+//             if (screen[index] == 1)
+//                 printf("██"); // pixel ON
+//             else
+//                 printf("  "); // pixel OFF
+//         }
+//         printf("\n"); // new row
+//     }
+// }
 
 void Chip8::decode(uint16_t instruction) {
     uint8_t D = (instruction & 0xF000) >> 12;
@@ -168,8 +167,8 @@ void Chip8::decode(uint16_t instruction) {
             printf("%02X == %02X, skipping next instruction.\n", dibble,
                    registers[X]);
             program_counter += 2;
-        }
-        printf("%02X != %02X, nothing to do.\n", dibble, registers[X]);
+        } else
+            printf("%02X != %02X, nothing to do.\n", dibble, registers[X]);
     }
     // 4xkk - Skip Next (PC += 2) if Vx != kk
     else if (D == 0x4) {
@@ -197,7 +196,7 @@ void Chip8::decode(uint16_t instruction) {
     // 7xkk - Add kk to Vx
     else if (D == 0x7) {
         printf("Adding %X to register %X = %X\n", dibble, registers[X],
-               registers[X] + dibble);
+               (registers[X] + dibble) & 0xFF);
         registers[X] += dibble;
     }
     // DXYN - Display
@@ -236,6 +235,7 @@ void Chip8::decode(uint16_t instruction) {
     }
     // 8xyn - Arithematic Operations
     else if (D == 0x8) {
+        printf("Arithematic Operation\n");
         auto &vx = registers[X];
         auto &vy = registers[Y];
 
@@ -252,11 +252,12 @@ void Chip8::decode(uint16_t instruction) {
         case 0x3:
             vx = vx ^ vy;
             break;
-        case 0x4:
-            if (vx + vy > 255)
-                registers[0xF] = 1;
-            vx = (vx + vy) & 0xFF;
+        case 0x4: {
+            uint16_t sum = vx + vy;
+            registers[0xF] = (sum > 0xFF);
+            vx = sum & 0xFF;
             break;
+        }
         case 0x5:
             if (vx > vy)
                 registers[0xF] = 1;
@@ -277,23 +278,98 @@ void Chip8::decode(uint16_t instruction) {
             vx = vy - vx;
             break;
         case 0xE:
-            registers[0xF] = vx & 0xF;
+            registers[0xF] = (vx & 0x80) >> 7;
             vx = vx << 1;
             break;
         default:
             break;
         }
-    } else if (D == 0x9) {
+    }
+    // 9xy0 - Skip if Vx != Vy
+    else if (D == 0x9) {
+        printf("Skip if Vx != Vy\n");
         if (registers[X] != registers[Y]) {
             program_counter += 2;
         }
     }
-
+    // Ex91 and ExA1 (Keyboard)
+    else if (D == 0xE) {
+        if (dibble == 0x9E) {
+            printf("Dibble 0x9E\n");
+            if (keypad[registers[X]])
+                program_counter += 2;
+        }
+        if (dibble == 0xA1) {
+            printf("Dibble 0xA1\n");
+            if (!keypad[registers[X]])
+                program_counter += 2;
+        }
+    }
+    // FxNN
+    else if (D == 0xF) {
+        // 07 - Vx = delay timer
+        if (dibble == 0x07) {
+            registers[X] = delay_timer;
+        }
+        // 0A - wait for key press, store key in Vx
+        else if (dibble == 0x0A) {
+            bool keyPressed = false;
+            int key = -1;
+            for (int k = 0; k < 16; k++) {
+                if (keypad[k]) {      // if this key is pressed
+                    registers[X] = k; // store it in Vx
+                    key = k;
+                    keyPressed = true;
+                    break;
+                }
+            }
+            if (!keyPressed) {
+                printf("Idle \n");
+                // stay on this instruction
+                program_counter -= 2;
+            } else {
+                printf("Key %d pressed\n", key);
+            }
+        }
+        // 15 - Set delay timer = Vx
+        else if (dibble == 0x15) {
+            delay_timer = registers[X];
+        }
+        // 18 - Set sound timer = Vx
+        else if (dibble == 0x18) {
+            sound_timer = registers[X];
+        }
+        // 1E - I = I + Vx
+        else if (dibble == 0x1E) {
+            index_register += registers[X];
+        }
+        // 29 - Set I = location of sprite (font) for digit Vx
+        else if (dibble == 0x29) {
+            // x5 cause each sprite takes 5 bytes
+            index_register = 0x50 + ((registers[X] & 0xF) * 5);
+        }
+        // 33 - Store BCD in I, I+1, I+2
+        else if (dibble == 0x33) {
+            uint8_t value = registers[X];
+            memory[index_register] = value / 100;           // hundreds digit
+            memory[index_register + 1] = (value / 10) % 10; // tens digit
+            memory[index_register + 2] = value % 10;
+        }
+        // 55 - Stores register from V0 to Vx in memory starting from I
+        else if (dibble == 0x55) {
+            for (int i = 0; i <= X; i++) {
+                memory[index_register + i] = registers[i];
+            }
+        }
+        // 65 - Read memory from registers
+        else if (dibble == 0x65) {
+            for (int i = 0; i <= X; i++) {
+                registers[i] = memory[index_register + i];
+            }
+        }
+    }
     // Jump to the next line
     else {
         printf("\n");
     }
-
-    printf("\033[2J\033[H");
-    drawScreen(graphics);
 }

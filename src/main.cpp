@@ -1,4 +1,7 @@
+#include "SDL3/SDL_init.h"
+#include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_mouse.h"
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <ostream>
@@ -57,11 +60,62 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
+int mapKey(SDL_Keycode key) {
+    switch (key) {
+    case SDLK_1:
+        return 0x1;
+    case SDLK_2:
+        return 0x2;
+    case SDLK_3:
+        return 0x3;
+    case SDLK_4:
+        return 0xC;
+    case SDLK_Q:
+        return 0x4;
+    case SDLK_W:
+        return 0x5;
+    case SDLK_E:
+        return 0x6;
+    case SDLK_R:
+        return 0xD;
+    case SDLK_A:
+        return 0x7;
+    case SDLK_S:
+        return 0x8;
+    case SDLK_D:
+        return 0x9;
+    case SDLK_F:
+        return 0xE;
+    case SDLK_Z:
+        return 0xA;
+    case SDLK_X:
+        return 0x0;
+    case SDLK_C:
+        return 0xB;
+    case SDLK_V:
+        return 0xF;
+    default:
+        return -1;
+    }
+}
+
 /* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     if (event->type == SDL_EVENT_QUIT) {
-        return SDL_APP_SUCCESS; /* end the program, reporting success to the OS.
-                                 */
+        return SDL_APP_SUCCESS; // end the program, reporting success to the OS.
+    }
+
+    // Layout:
+    // 1	2	3	C
+    // 4	5	6	D
+    // 7	8	9	E
+    // A	0	B	F
+
+    if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) {
+        int chip8Key = mapKey(event->key.key);
+        if (chip8Key != -1) {
+            chip.keypad[chip8Key] = (event->type == SDL_EVENT_KEY_DOWN) ? 1 : 0;
+        }
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
@@ -76,6 +130,32 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
+void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
+    for (int y = 0; y < 32; y++) {
+        for (int x = 0; x < 64; x++) {
+            int index = y * 64 + x;
+            if (screen[index] == 1)
+                printf("██"); // pixel ON
+            else
+                printf("  "); // pixel OFF
+        }
+        printf("\n"); // new row
+    }
+}
+
+void beep_callback(void *userdata, Uint8 *stream, int len) {
+    static double phase = 0.0;
+    double frequency = 440.0; // A4
+    int sample_rate = 44100;
+
+    for (int i = 0; i < len; i++) {
+        stream[i] = (Sint8)(std::sin(phase) * 127); // 8-bit signed wave
+        phase += 2.0 * 3.14 * frequency / sample_rate;
+        if (phase > 2.0 * 3.14)
+            phase -= 2.0 * 3.14;
+    }
+}
+
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate) {
     uint64_t start = SDL_GetTicks();
@@ -83,8 +163,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     // Update
 
     // Chip 8 Update loop -------------
-    auto instruction = chip.fetchOp();
-    chip.decode(instruction);
+    const int cycles = 20;
+    for (int i = 0; i < cycles; i++) {
+        auto instruction = chip.fetchOp();
+        chip.decode(instruction);
+    }
     // --------------------------------
 
     float mouseX, mouseY;
@@ -111,6 +194,9 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderRect(renderer, &button);
 
+    printf("\033[2J\033[H");
+    drawScreen(chip.graphics);
+
     /* put the newly-cleared rendering on the screen. */
     SDL_RenderPresent(renderer);
 
@@ -118,6 +204,15 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     uint64_t elapsed = SDL_GetTicks() - start;
     if (elapsed < frame_time) {
         SDL_Delay((uint32_t)(frame_time - elapsed));
+    }
+
+    if (chip.delay_timer > 0)
+        chip.delay_timer--;
+    if (chip.sound_timer > 0) {
+        chip.sound_timer--;
+        if (chip.sound_timer == 0) {
+            // stop buzzer here
+        }
     }
 
     return SDL_APP_CONTINUE; /* carry on with the program! */
