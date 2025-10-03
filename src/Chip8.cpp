@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <fstream>
 #include <ios>
+#include <random>
 #include <strings.h>
 #include <vector>
 
@@ -142,8 +143,24 @@ void Chip8::decode(uint16_t instruction) {
     }
     // ANNN set index register to NNN
     else if (D == 0xA) {
-        printf("Set I to %X", tribble);
+        printf("Set I to %X\n", tribble);
         index_register = tribble;
+    }
+    // BNNN Jump to NNN + V0
+    else if (D == 0xB) {
+        printf("Jump to %04X (tribble + V0)\n", (tribble + registers[0x0]));
+        program_counter = tribble + registers[0x0];
+    }
+    // CxNN Random byte & dibble
+    else if (D == 0xC) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<uint8_t> distrib(0, 255);
+
+        uint8_t random_byte = distrib(gen);
+
+        printf("Random Byte: %X\n", random_byte);
+        registers[X] = random_byte & dibble;
     }
     // 3xkk - Skip Next (PC += 2) if Vx = kk
     else if (D == 0x3) {
@@ -192,26 +209,84 @@ void Chip8::decode(uint16_t instruction) {
         // For N rows
         for (auto row = 0; row < N; row++) {
             uint8_t yPos = registers[Y] + row;
+            // If going outside bottom side of screen
             if (yPos >= 32)
                 break;
             uint8_t sprite_data = memory[index_register + row];
             for (int col = 0; col < 8; col++) {
+                // If going outside right side of screen
                 uint8_t xPos = registers[X] + col;
                 if (xPos >= 64)
                     break;
+                // Check if sprite data is set (Check from MSB)
                 if ((sprite_data & (0x80 >> col)) != 0) {
                     // Index in graphics array
                     size_t index = yPos * 64 + xPos;
 
+                    // Collision (VF = 1)
                     if (graphics[index] == 1) {
                         registers[0xF] = 1;
                     }
 
+                    // Graphics set to XOR of value
                     graphics[index] ^= 1;
                 }
             }
         }
+    }
+    // 8xyn - Arithematic Operations
+    else if (D == 0x8) {
+        auto &vx = registers[X];
+        auto &vy = registers[Y];
 
+        switch (N) {
+        case 0x0:
+            vx = vy;
+            break;
+        case 0x1:
+            vx = vx | vy;
+            break;
+        case 0x2:
+            vx = vx & vy;
+            break;
+        case 0x3:
+            vx = vx ^ vy;
+            break;
+        case 0x4:
+            if (vx + vy > 255)
+                registers[0xF] = 1;
+            vx = (vx + vy) & 0xFF;
+            break;
+        case 0x5:
+            if (vx > vy)
+                registers[0xF] = 1;
+            else
+                registers[0xF] = 0;
+
+            vx = vx - vy;
+            break;
+        case 0x6:
+            registers[0xF] = vx & 0x1;
+            vx = vx >> 1;
+            break;
+        case 0x7:
+            if (vy > vx)
+                registers[0xF] = 1;
+            else
+                registers[0xF] = 0;
+            vx = vy - vx;
+            break;
+        case 0xE:
+            registers[0xF] = vx & 0xF;
+            vx = vx << 1;
+            break;
+        default:
+            break;
+        }
+    } else if (D == 0x9) {
+        if (registers[X] != registers[Y]) {
+            program_counter += 2;
+        }
     }
 
     // Jump to the next line
