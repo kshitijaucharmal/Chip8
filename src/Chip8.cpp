@@ -17,6 +17,7 @@ Chip8::Chip8() {
     registers.fill(0);
     graphics.fill(0);
     keypad.fill(0);
+    prev_keypad.fill(0);
     stack.fill(0);
 
     // Reset Special Registers

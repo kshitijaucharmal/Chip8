@@ -30,6 +30,7 @@ struct Chip8 {
 
     // Keypad 16 keys (0x0 - 0xF)(0 - not pressed, 1 - pressed)
     std::array<uint8_t, 16> keypad;
+    std::array<uint8_t, 16> prev_keypad;
 
     // Timers 8bit, decrement at 60Hz
     // Delay Timer (DT)
