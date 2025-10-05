@@ -69,6 +69,10 @@ bool Chip8::loadROM(const std::string &path) {
     return true;
 }
 
+bool Chip8::isKeyPressedOnce(uint8_t key) {
+    return keypad[key] && !prev_keypad[key];
+}
+
 uint16_t Chip8::fetchOp() {
     uint8_t i1 = memory[program_counter];
     uint8_t i2 = memory[program_counter + 1];
@@ -314,22 +318,24 @@ void Chip8::decode(uint16_t instruction) {
         }
         // 0A - wait for key press, store key in Vx
         else if (dibble == 0x0A) {
-            bool keyPressed = false;
-            int key = -1;
+            bool keyPressed = false; // track if any key was pressed this frame
             for (int k = 0; k < 16; k++) {
-                if (keypad[k]) {      // if this key is pressed
-                    registers[X] = k; // store it in Vx
-                    key = k;
+                if (isKeyPressedOnce(k)) {
+                    registers[X] = k; // store key in register
+                    waitForKey = false;
                     keyPressed = true;
                     break;
                 }
             }
+
             if (!keyPressed) {
-                printf("Idle \n");
-                // stay on this instruction
+                // stay on this instruction until a key is pressed
                 program_counter -= 2;
+                // optional: print debug
+                printf("Waiting for key press...\n");
             } else {
-                printf("Key %d pressed\n", key);
+                // optional: debug print
+                printf("Key %d pressed\n", registers[X]);
             }
         }
         // 15 - Set delay timer = Vx

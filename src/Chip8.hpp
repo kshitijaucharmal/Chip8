@@ -38,6 +38,8 @@ struct Chip8 {
     // Sound Timer (ST)
     uint8_t sound_timer;
 
+    bool waitForKey = true;
+
     // Functions
     // Constructor
     explicit Chip8();
@@ -53,4 +55,5 @@ struct Chip8 {
     // execute the instruction
     // TODO: Take in the decoded value
     void execute();
+    bool isKeyPressedOnce(uint8_t key);
 };

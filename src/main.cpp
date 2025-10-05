@@ -3,8 +3,7 @@
 #include "SDL3/SDL_mouse.h"
 #include <cmath>
 #include <cstdint>
-#include <iostream>
-#include <ostream>
+#include <unordered_map>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -30,8 +29,45 @@ Chip8 chip;
 const double fps = 60.0;
 const double frame_time = 1000.0 / fps;
 
+std::unordered_map<SDL_Keycode, uint8_t> mp;
+
+// Layout:
+// 1	2	3	C
+// 4	5	6	D
+// 7	8	9	E
+// A	0	B	F
+void initKeyMap() {
+    mp[SDLK_1] = 0x1;
+    mp[SDLK_2] = 0x2;
+    mp[SDLK_3] = 0x3;
+    mp[SDLK_4] = 0xC;
+    mp[SDLK_Q] = 0x4;
+    mp[SDLK_W] = 0x5;
+    mp[SDLK_E] = 0x6;
+    mp[SDLK_R] = 0xD;
+    mp[SDLK_A] = 0x7;
+    mp[SDLK_S] = 0x8;
+    mp[SDLK_D] = 0x9;
+    mp[SDLK_F] = 0xE;
+    mp[SDLK_Z] = 0xA;
+    mp[SDLK_X] = 0x0;
+    mp[SDLK_C] = 0xB;
+    mp[SDLK_V] = 0xF;
+}
+
+int mapKey(SDL_Keycode key) {
+    if (mp.contains(key)) {
+        return mp[key];
+    }
+    return -1;
+}
+
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
+    // Initialize map
+    initKeyMap();
+
+    // Load rom
     if (argc == 2) {
         // Load ROM
         if (!chip.loadROM(argv[1])) {
@@ -40,6 +76,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
     } else {
         printf("Invalid arguments passed, check file path\n");
+        return SDL_APP_FAILURE;
     }
 
     SDL_SetAppMetadata("Example Renderer Clear", "1.0",
@@ -60,73 +97,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
-int mapKey(SDL_Keycode key) {
-    switch (key) {
-    case SDLK_1:
-        return 0x1;
-    case SDLK_2:
-        return 0x2;
-    case SDLK_3:
-        return 0x3;
-    case SDLK_4:
-        return 0xC;
-    case SDLK_Q:
-        return 0x4;
-    case SDLK_W:
-        return 0x5;
-    case SDLK_E:
-        return 0x6;
-    case SDLK_R:
-        return 0xD;
-    case SDLK_A:
-        return 0x7;
-    case SDLK_S:
-        return 0x8;
-    case SDLK_D:
-        return 0x9;
-    case SDLK_F:
-        return 0xE;
-    case SDLK_Z:
-        return 0xA;
-    case SDLK_X:
-        return 0x0;
-    case SDLK_C:
-        return 0xB;
-    case SDLK_V:
-        return 0xF;
-    default:
-        return -1;
-    }
-}
-
 /* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS; // end the program, reporting success to the OS.
     }
 
-    // Layout:
-    // 1	2	3	C
-    // 4	5	6	D
-    // 7	8	9	E
-    // A	0	B	F
-
-    if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) {
-        int chip8Key = mapKey(event->key.key);
-        if (chip8Key != -1) {
-            chip.keypad[chip8Key] = (event->type == SDL_EVENT_KEY_DOWN) ? 1 : 0;
-        }
-    }
-
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-        int x = event->button.x;
-        int y = event->button.y;
-        if (x >= button.x && x < button.x + button.w && y >= button.y &&
-            y < button.y + button.h) {
-            // button clicked
-            std::cout << "Button Clicked" << std::endl;
-        }
-    }
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
@@ -161,10 +137,17 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     uint64_t start = SDL_GetTicks();
 
     // Update
-
     // Chip 8 Update loop -------------
-    const int cycles = 20;
+    const int cycles = 50;
     for (int i = 0; i < cycles; i++) {
+
+        const bool *keyStates = SDL_GetKeyboardState(NULL);
+        for (auto &[keycode, chipKey] : mp) {
+            SDL_Scancode sc = SDL_GetScancodeFromKey(keycode, NULL);
+            chip.prev_keypad[chipKey] = chip.keypad[chipKey]; // remember old
+            chip.keypad[chipKey] = keyStates[sc] ? 1 : 0;
+        }
+
         auto instruction = chip.fetchOp();
         chip.decode(instruction);
     }
@@ -180,20 +163,6 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255); // background
     SDL_RenderClear(renderer);
 
-    // Choose button color
-    SDL_Color drawColor = hovering ? hoverColor : normalColor;
-    if (hovering && SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK) {
-        drawColor = activeColor; // pressed state
-    }
-
-    SDL_SetRenderDrawColor(renderer, drawColor.r, drawColor.g, drawColor.b,
-                           255);
-    SDL_RenderFillRect(renderer, &button);
-
-    // Draw outline
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderRect(renderer, &button);
-
     printf("\033[2J\033[H");
     drawScreen(chip.graphics);
 
@@ -206,6 +175,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         SDL_Delay((uint32_t)(frame_time - elapsed));
     }
 
+    // Delay timer and Sound timer dec
     if (chip.delay_timer > 0)
         chip.delay_timer--;
     if (chip.sound_timer > 0) {
