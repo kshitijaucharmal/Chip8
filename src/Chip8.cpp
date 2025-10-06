@@ -320,11 +320,6 @@ void Chip8::decode(uint16_t instruction) {
             if (!keyPressed) {
                 // stay on this instruction until a key is pressed
                 program_counter -= 2;
-                // optional: print debug
-                // printf("Waiting for key press...\n");
-            } else {
-                // optional: debug print
-                // printf("Key %d pressed\n", registers[X]);
             }
         }
         // 15 - Set delay timer = Vx

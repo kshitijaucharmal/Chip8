@@ -1,8 +1,11 @@
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_mouse.h"
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_render.h>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
+#include <strings.h>
 #include <unordered_map>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
@@ -14,7 +17,7 @@
 
 const int screenwidth = 64;
 const int screenheight = 32;
-const int tilesize = 10;
+const int tilesize = 20;
 
 /* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
@@ -23,10 +26,11 @@ const SDL_FRect button = {10, 10, 200, 80};
 SDL_Color normalColor = {70, 130, 180, 255}; // steel blue
 SDL_Color hoverColor = {100, 149, 237, 255}; // lighter blue
 SDL_Color activeColor = {30, 144, 255, 255}; // darker blue
+SDL_Texture *texture;
 
 Chip8 chip;
 
-const double fps = 60.0;
+const double fps = 700.0;
 const double frame_time = 1000.0 / fps;
 
 std::unordered_map<SDL_Keycode, uint8_t> mp;
@@ -67,6 +71,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     // Initialize map
     initKeyMap();
 
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                SDL_TEXTUREACCESS_STREAMING, 64 * tilesize,
+                                32 * tilesize);
+
     // Load rom
     if (argc == 2) {
         // Load ROM
@@ -106,17 +114,34 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
-void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
-    for (int y = 0; y < 32; y++) {
-        for (int x = 0; x < 64; x++) {
+#include <SDL3/SDL.h>
+#include <array>
+
+void drawScreen(SDL_Renderer *renderer,
+                const std::array<uint8_t, 64 * 32> &screen, int scaleFactor) {
+    // Clear screen (black background)
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    // Set draw color for pixels (white)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+    // Draw scaled pixels
+    for (int y = 0; y < 32; ++y) {
+        for (int x = 0; x < 64; ++x) {
             int index = y * 64 + x;
-            if (screen[index] == 1)
-                printf("██"); // pixel ON
-            else
-                printf("  "); // pixel OFF
+            if (screen[index] == 1) {
+                SDL_FRect pixelRect = {static_cast<float>(x * scaleFactor),
+                                       static_cast<float>(y * scaleFactor),
+                                       static_cast<float>(scaleFactor),
+                                       static_cast<float>(scaleFactor)};
+                SDL_RenderFillRect(renderer, &pixelRect);
+            }
         }
-        printf("\n"); // new row
     }
+
+    // Present the rendered frame
+    SDL_RenderPresent(renderer);
 }
 
 void beep_callback(void *userdata, Uint8 *stream, int len) {
@@ -137,40 +162,20 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     uint64_t start = SDL_GetTicks();
 
     // Update
-    // Chip 8 Update loop -------------
-    const int cycles = 50;
-    for (int i = 0; i < cycles; i++) {
-
-        const bool *keyStates = SDL_GetKeyboardState(NULL);
-        for (auto &[keycode, chipKey] : mp) {
-            SDL_Scancode sc = SDL_GetScancodeFromKey(keycode, NULL);
-            chip.prev_keypad[chipKey] = chip.keypad[chipKey]; // remember old
-            chip.keypad[chipKey] = keyStates[sc] ? 1 : 0;
-        }
-
-        auto instruction = chip.fetchOp();
-        chip.decode(instruction);
+    // Chip 8 keypad -------------
+    const bool *keyStates = SDL_GetKeyboardState(NULL);
+    for (auto &[keycode, chipKey] : mp) {
+        SDL_Scancode sc = SDL_GetScancodeFromKey(keycode, NULL);
+        chip.prev_keypad[chipKey] = chip.keypad[chipKey]; // remember old
+        chip.keypad[chipKey] = keyStates[sc] ? 1 : 0;
     }
+
+    // Chip 8 Update loop -------------
+    auto instruction = chip.fetchOp();
+    chip.decode(instruction);
     // --------------------------------
 
-    float mouseX, mouseY;
-    SDL_GetMouseState(&mouseX, &mouseY);
-
-    bool hovering = (mouseX >= button.x && mouseX < button.x + button.w &&
-                     mouseY >= button.y && mouseY < button.y + button.h);
-
-    // Draw
-    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255); // background
-    SDL_RenderClear(renderer);
-
-    if (chip.drawOccured) {
-        printf("\033[2J\033[H");
-        drawScreen(chip.graphics);
-        chip.drawOccured = false;
-    }
-
-    /* put the newly-cleared rendering on the screen. */
-    SDL_RenderPresent(renderer);
+    drawScreen(renderer, chip.graphics, tilesize);
 
     // Frame Linting
     uint64_t elapsed = SDL_GetTicks() - start;
