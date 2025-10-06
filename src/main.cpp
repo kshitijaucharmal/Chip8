@@ -56,7 +56,7 @@ void initKeyMap() {
 }
 
 int mapKey(SDL_Keycode key) {
-    if (mp.contains(key)) {
+    if (mp.count(key)) {
         return mp[key];
     }
     return -1;
@@ -163,8 +163,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255); // background
     SDL_RenderClear(renderer);
 
-    printf("\033[2J\033[H");
-    drawScreen(chip.graphics);
+    if (chip.drawOccured) {
+        printf("\033[2J\033[H");
+        drawScreen(chip.graphics);
+        chip.drawOccured = false;
+    }
 
     /* put the newly-cleared rendering on the screen. */
     SDL_RenderPresent(renderer);

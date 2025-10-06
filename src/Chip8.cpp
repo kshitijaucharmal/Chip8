@@ -84,19 +84,6 @@ uint16_t Chip8::fetchOp() {
     return current_op;
 }
 
-// void drawScreen(const std::array<uint8_t, 64 * 32> screen) {
-//     for (int y = 0; y < 32; y++) {
-//         for (int x = 0; x < 64; x++) {
-//             int index = y * 64 + x;
-//             if (screen[index] == 1)
-//                 printf("██"); // pixel ON
-//             else
-//                 printf("  "); // pixel OFF
-//         }
-//         printf("\n"); // new row
-//     }
-// }
-
 void Chip8::decode(uint16_t instruction) {
     uint8_t D = (instruction & 0xF000) >> 12;
     uint8_t X = (instruction & 0x0F00) >> 8;
@@ -109,27 +96,28 @@ void Chip8::decode(uint16_t instruction) {
     uint8_t dibble = (Y << 4) | N;
 
     // Print the instruction
-    printf("%X%X%X%X: ", D, X, Y, N);
+    // printf("%X%X%X%X: ", D, X, Y, N);
 
     // TODO: Implement these in execute, instruction type -> enum
     //
     // Clear Screen 0x00E0
     if (instruction == 0x00E0) {
-        printf("Clear Screen\n");
+        // printf("Clear Screen\n");
         // Clear Screen
         graphics.fill(0);
+        drawOccured = true;
     }
     // Jump to location, 1NNN
     else if (D == 0x1) {
-        printf("Jump to %04X\n", tribble);
+        // printf("Jump to %04X\n", tribble);
         program_counter = tribble;
     }
     // 2NNN Call a subroutine
     else if (D == 0x2) {
         // TODO: Check if stack filled
         // Pushing to stack
-        printf("Push PC (%04X) to stack and Jump to %X\n", program_counter,
-               tribble);
+        // printf("Push PC (%04X) to stack and Jump to %X\n", program_counter,
+        // tribble);
         stack[stack_ptr++] = program_counter;
 
         program_counter = tribble;
@@ -143,16 +131,16 @@ void Chip8::decode(uint16_t instruction) {
         // get the ptr down
         stack_ptr--;
 
-        printf("Go Back\n");
+        // printf("Go Back\n");
     }
     // ANNN set index register to NNN
     else if (D == 0xA) {
-        printf("Set I to %X\n", tribble);
+        // printf("Set I to %X\n", tribble);
         index_register = tribble;
     }
     // BNNN Jump to NNN + V0
     else if (D == 0xB) {
-        printf("Jump to %04X (tribble + V0)\n", (tribble + registers[0x0]));
+        // printf("Jump to %04X (tribble + V0)\n", (tribble + registers[0x0]));
         program_counter = tribble + registers[0x0];
     }
     // CxNN Random byte & dibble
@@ -163,50 +151,50 @@ void Chip8::decode(uint16_t instruction) {
 
         uint8_t random_byte = distrib(gen);
 
-        printf("Random Byte: %X\n", random_byte);
+        // printf("Random Byte: %X\n", random_byte);
         registers[X] = random_byte & dibble;
     }
     // 3xkk - Skip Next (PC += 2) if Vx = kk
     else if (D == 0x3) {
         if (dibble == registers[X]) {
-            printf("%02X == %02X, skipping next instruction.\n", dibble,
-                   registers[X]);
+            // printf("%02X == %02X, skipping next instruction.\n", dibble,
+            // registers[X]);
             program_counter += 2;
-        } else
-            printf("%02X != %02X, nothing to do.\n", dibble, registers[X]);
+        }
+        // printf("%02X != %02X, nothing to do.\n", dibble, registers[X]);
     }
     // 4xkk - Skip Next (PC += 2) if Vx != kk
     else if (D == 0x4) {
         if (dibble != registers[X]) {
-            printf("%02X != %02X, skipping next instruction.\n", dibble,
-                   registers[X]);
+            // printf("%02X != %02X, skipping next instruction.\n", dibble,
+            // registers[X]);
             program_counter += 2;
         }
-        printf("%02X == %02X, nothing to do.\n", dibble, registers[X]);
+        // printf("%02X == %02X, nothing to do.\n", dibble, registers[X]);
     }
     // 5xy0 - Skip Next (PC += 2) if Vx == Vy
     else if (D == 0x5) {
         if (registers[X] == registers[Y]) {
-            printf("%02X == %02X, skipping next instruction.\n", registers[X],
-                   registers[Y]);
+            // printf("%02X == %02X, skipping next instruction.\n",
+            // registers[X], registers[Y]);
             program_counter += 2;
         }
-        printf("%02X != %02X, nothing to do.\n", registers[X], registers[Y]);
+        // printf("%02X != %02X, nothing to do.\n", registers[X], registers[Y]);
     }
     // 6xkk - Set Vx = kk
     else if (D == 0x6) {
-        printf("Setting register %X to %X\n", X, dibble);
+        // printf("Setting register %X to %X\n", X, dibble);
         registers[X] = dibble;
     }
     // 7xkk - Add kk to Vx
     else if (D == 0x7) {
-        printf("Adding %X to register %X = %X\n", dibble, registers[X],
-               (registers[X] + dibble) & 0xFF);
+        // printf("Adding %X to register %X = %X\n", dibble, registers[X],
+        // (registers[X] + dibble) & 0xFF);
         registers[X] += dibble;
     }
     // DXYN - Display
     else if (D == 0xD) {
-        printf("Drawing Sprite\n");
+        // printf("Drawing Sprite\n");
 
         registers[0xF] = 0;
 
@@ -237,10 +225,11 @@ void Chip8::decode(uint16_t instruction) {
                 }
             }
         }
+        drawOccured = true;
     }
     // 8xyn - Arithematic Operations
     else if (D == 0x8) {
-        printf("Arithematic Operation\n");
+        // printf("Arithematic Operation\n");
         auto &vx = registers[X];
         auto &vy = registers[Y];
 
@@ -292,7 +281,7 @@ void Chip8::decode(uint16_t instruction) {
     }
     // 9xy0 - Skip if Vx != Vy
     else if (D == 0x9) {
-        printf("Skip if Vx != Vy\n");
+        // printf("Skip if Vx != Vy\n");
         if (registers[X] != registers[Y]) {
             program_counter += 2;
         }
@@ -300,12 +289,12 @@ void Chip8::decode(uint16_t instruction) {
     // Ex91 and ExA1 (Keyboard)
     else if (D == 0xE) {
         if (dibble == 0x9E) {
-            printf("Dibble 0x9E\n");
+            // printf("Dibble 0x9E\n");
             if (keypad[registers[X]])
                 program_counter += 2;
         }
         if (dibble == 0xA1) {
-            printf("Dibble 0xA1\n");
+            // printf("Dibble 0xA1\n");
             if (!keypad[registers[X]])
                 program_counter += 2;
         }
@@ -332,10 +321,10 @@ void Chip8::decode(uint16_t instruction) {
                 // stay on this instruction until a key is pressed
                 program_counter -= 2;
                 // optional: print debug
-                printf("Waiting for key press...\n");
+                // printf("Waiting for key press...\n");
             } else {
                 // optional: debug print
-                printf("Key %d pressed\n", registers[X]);
+                // printf("Key %d pressed\n", registers[X]);
             }
         }
         // 15 - Set delay timer = Vx
@@ -374,9 +363,5 @@ void Chip8::decode(uint16_t instruction) {
                 registers[i] = memory[index_register + i];
             }
         }
-    }
-    // Jump to the next line
-    else {
-        printf("\n");
     }
 }
