@@ -4,7 +4,6 @@
 #include <SDL3/SDL_render.h>
 #include <cmath>
 #include <cstdint>
-#include <iostream>
 #include <strings.h>
 #include <unordered_map>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
@@ -15,9 +14,25 @@
 
 #include "Chip8.hpp"
 
+#define HEXCOLOR(c)                                                            \
+    ((SDL_Color){((c) >> 24) & 0xFF, ((c) >> 16) & 0xFF, ((c) >> 8) & 0xFF,    \
+                 (c) & 0xFF})
+
 const int screenwidth = 64;
 const int screenheight = 32;
 const int tilesize = 20;
+
+const int CHIP8_FREQUENCY = 700; // instructions per second
+const int TIMER_FREQUENCY = 60;  // 60 Hz for delay/sound timers
+uint64_t lastCycleTime = 0;
+uint64_t lastTimerUpdate = 0;
+
+// Colors
+// constexpr uint32_t BG_COLOR = 0x101010FF; // Very dark gray / almost black
+// constexpr uint32_t FG_COLOR = 0xAA0000FF; // Dark Red
+
+constexpr uint32_t BG_COLOR = 0x0B0000FF; // Very dark maroon
+constexpr uint32_t FG_COLOR = 0xFF6600FF; // Red-Orange
 
 /* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
@@ -29,9 +44,6 @@ SDL_Color activeColor = {30, 144, 255, 255}; // darker blue
 SDL_Texture *texture;
 
 Chip8 chip;
-
-const double fps = 700.0;
-const double frame_time = 1000.0 / fps;
 
 std::unordered_map<SDL_Keycode, uint8_t> mp;
 
@@ -119,12 +131,15 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 void drawScreen(SDL_Renderer *renderer,
                 const std::array<uint8_t, 64 * 32> &screen, int scaleFactor) {
-    // Clear screen (black background)
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+
+    SDL_Color bg = HEXCOLOR(BG_COLOR);
+    SDL_Color fg = HEXCOLOR(FG_COLOR);
+    // Clear screen
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderClear(renderer);
 
-    // Set draw color for pixels (white)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    // Set draw color for pixels
+    SDL_SetRenderDrawColor(renderer, fg.r, fg.g, fg.b, fg.a);
 
     // Draw scaled pixels
     for (int y = 0; y < 32; ++y) {
@@ -159,7 +174,7 @@ void beep_callback(void *userdata, Uint8 *stream, int len) {
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate) {
-    uint64_t start = SDL_GetTicks();
+    uint64_t now = SDL_GetTicks();
 
     // Update
     // Chip 8 keypad -------------
@@ -175,23 +190,34 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     chip.decode(instruction);
     // --------------------------------
 
-    drawScreen(renderer, chip.graphics, tilesize);
-
-    // Frame Linting
-    uint64_t elapsed = SDL_GetTicks() - start;
-    if (elapsed < frame_time) {
-        SDL_Delay((uint32_t)(frame_time - elapsed));
+    if (now - lastCycleTime >= 1000.0 / CHIP8_FREQUENCY) {
+        auto instruction = chip.fetchOp();
+        chip.decode(instruction);
+        lastCycleTime = now;
     }
 
-    // Delay timer and Sound timer dec
-    if (chip.delay_timer > 0)
-        chip.delay_timer--;
-    if (chip.sound_timer > 0) {
-        chip.sound_timer--;
-        if (chip.sound_timer == 0) {
-            // stop buzzer here
-        }
+    if (now - lastTimerUpdate >= 1000.0 / TIMER_FREQUENCY) {
+        if (chip.delay_timer > 0)
+            chip.delay_timer--;
+        if (chip.sound_timer > 0)
+            chip.sound_timer--;
+        lastTimerUpdate = now;
     }
+
+    if (chip.drawOccured) {
+        drawScreen(renderer, chip.graphics, tilesize);
+        chip.drawOccured = false;
+    }
+
+    // // Delay timer and Sound timer dec
+    // if (chip.delay_timer > 0)
+    //     chip.delay_timer--;
+    // if (chip.sound_timer > 0) {
+    //     chip.sound_timer--;
+    //     if (chip.sound_timer == 0) {
+    //         // stop buzzer here
+    //     }
+    // }
 
     return SDL_APP_CONTINUE; /* carry on with the program! */
 }
